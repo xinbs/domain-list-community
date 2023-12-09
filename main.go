@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/v2fly/domain-list-community/internal/dlc"
 	router "github.com/v2fly/v2ray-core/v5/app/router/routercommon"
@@ -93,6 +96,61 @@ func writePlainList(exportedName string) error {
 		fmt.Fprintln(w, entry.Plain)
 	}
 	return w.Flush()
+}
+
+func exportGFWList(pl *ParsedList) error {
+	var entryBytes []byte
+	timeString := fmt.Sprintf("! Last Modified: %s\n", time.Now())
+	entryBytes = append(entryBytes, []byte("[AutoProxy 0.2.9]\n")...)
+	entryBytes = append(entryBytes, []byte(timeString)...)
+	entryBytes = append(entryBytes, []byte("! Expires: 24h\n")...)
+	entryBytes = append(entryBytes, []byte("! HomePage: https://github.com/v2fly/domain-list-community\n")...)
+	entryBytes = append(entryBytes, []byte("! GitHub URL: https://raw.githubusercontent.com/v2fly/domain-list-community/release/gfwlist.txt\n")...)
+	entryBytes = append(entryBytes, []byte("! jsdelivr URL: https://cdn.jsdelivr.net/gh/v2fly/domain-list-community@release/gfwlist.txt\n")...)
+
+	for _, entry := range pl.Entries {
+		exclude := false
+		if attrs := entry.Attrs; len(attrs) > 0 {
+			// exclude rules that have '@cn' attribute
+			for _, attr := range attrs {
+				if strings.EqualFold(attr, "cn") {
+					exclude = true
+					break
+				}
+			}
+		}
+		if exclude {
+			fmt.Printf("Exclude '%s' from gfwlist.txt because it has '@cn' attribute\n", entry.Value)
+			continue
+		}
+		switch entry.Type {
+		case "domain":
+			entryBytes = append(entryBytes, []byte("||"+entry.Value+"\n")...)
+		case "full":
+			entryBytes = append(entryBytes, []byte("|http://"+entry.Value+"\n")...)
+			entryBytes = append(entryBytes, []byte("|https://"+entry.Value+"\n")...)
+		case "keyword":
+			entryBytes = append(entryBytes, []byte(entry.Value+"\n")...)
+		case "regexp":
+			entryBytes = append(entryBytes, []byte("/"+entry.Value+"/\n")...)
+		default:
+			return errors.New("unknown domain type: " + entry.Type)
+		}
+	}
+
+	f, err := os.OpenFile("gfwlist.txt", os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	encoder := base64.NewEncoder(base64.StdEncoding, f)
+	if _, err = encoder.Write(entryBytes); err != nil {
+		return err
+	}
+	fmt.Println("gfwlist.txt has been generated successfully in current directory.")
+	if err = encoder.Close(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func parseEntry(line string) (Entry, error) {
@@ -451,6 +509,15 @@ func main() {
 			os.Exit(1)
 		}
 		protoList.Entry = append(protoList.Entry, site)
+
+		// Export GfwList
+		if siteName == "GEOLOCATION-!CN" {
+			pl := plMap[siteName]
+			if err := exportGFWList(pl); err != nil {
+				fmt.Println("Failed: ", err)
+				os.Exit(1)
+			}
+		}
 	}
 	// Sort protoList so the marshaled list is reproducible
 	slices.SortFunc(protoList.Entry, func(a, b *router.GeoSite) int {
