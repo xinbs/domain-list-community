@@ -1,0 +1,117 @@
+name: Build Shadowrocket Rules
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 0 * * *"  # 每天 00:30 UTC 运行
+  push:
+    branches:
+      - master
+    paths:
+      - "shadowrocket/**"
+      - ".github/workflows/shadowrocket-rules.yml"
+
+jobs:
+  build-shadowrocket-rules:
+    name: Build Shadowrocket Rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v4
+        with:
+          path: code
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set variables
+        run: |
+          echo "RELEASE_NAME=shadowrocket-$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Install Python dependencies
+        run: |
+          cd code/shadowrocket
+          python -m venv shadowrocket_env
+          source shadowrocket_env/bin/activate
+          pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Build Shadowrocket rules
+        run: |
+          cd code/shadowrocket
+          source shadowrocket_env/bin/activate
+          
+          # 运行所有 Shadowrocket 规则生成脚本
+          echo "Building GFWList rules..."
+          python build_shadowrocket_rules.py
+          
+          echo "Building GFWList + AD blocking rules..."
+          python convert_gfwlist_ad.py
+          
+          echo "Building China IP bypass rules..."
+          python fetch_cn_ip_bypass.py
+          
+          # 复制生成的文件到根目录
+          cp resultant/*.conf ../
+          cp resultant/*.config ../
+          cp resultant/*.list ../
+          cp resultant/使用说明.md ../shadowrocket-usage.md
+
+      - name: Generate file checksums
+        run: |
+          cd code
+          for file in *.conf *.config *.list shadowrocket-usage.md; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" > "$file.sha256sum"
+            fi
+          done
+
+      - name: List generated files
+        run: |
+          cd code
+          echo "Generated Shadowrocket rule files:"
+          ls -la *.conf *.config *.list *.md *.sha256sum 2>/dev/null || echo "No files found"
+
+      - name: Git push assets to "release" branch
+        run: |
+          cd code
+          git init
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b release
+          
+          # 添加 Shadowrocket 相关文件
+          git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
+          
+          # 检查是否有文件需要提交
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
+            git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+            git push -f -u origin release
+            echo "✅ Successfully pushed Shadowrocket rules to release branch"
+          fi
+
+      - name: Create build summary
+        run: |
+          cd code
+          echo "## 🎯 Shadowrocket Rules Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Time:** ${{ env.BUILD_TIME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Name:** ${{ env.RELEASE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Generated Files:" >> $GITHUB_STEP_SUMMARY
+          for file in *.conf *.config *.list shadowrocket-usage.md; do
+            if [ -f "$file" ]; then
+              size=$(ls -lh "$file" | awk '{print $5}')
+              echo "- **$file** ($size)" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Usage:" >> $GITHUB_STEP_SUMMARY
+          echo "Files are available in the \`release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY

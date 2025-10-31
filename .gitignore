@@ -10,3 +10,17 @@ dlc.dat
 # Exported plaintext lists.
 /*.yml
 /*.txt
+
+# Python virtual environments
+shadowrocket_env/
+*_env/
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
