@@ -80,6 +80,7 @@ jobs:
 
       - name: Publish artifacts to release branch
         run: |
+          set -euo pipefail
           # 配置 Git 用户信息
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -111,6 +112,11 @@ jobs:
 
           # 在 release 工作副本内提交并推送
           cd release
+          # 其他工作流可能已强制更新 release 分支，先同步到最新状态
+          git fetch origin release || true
+          if git rev-parse --verify origin/release >/dev/null 2>&1; then
+            git reset --hard origin/release
+          fi
           git add -A shadowrocket
           if git diff --staged --quiet; then
             echo "No changes to commit for Shadowrocket rules"
