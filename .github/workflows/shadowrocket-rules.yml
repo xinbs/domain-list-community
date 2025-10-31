@@ -60,7 +60,14 @@ jobs:
           cp resultant/*.conf ../
           cp resultant/*.config ../
           cp resultant/*.list ../
-          cp resultant/使用说明.md ../shadowrocket-usage.md
+          # 复制使用说明文件（如果存在）
+          if [ -f "resultant/使用说明.md" ]; then
+            cp resultant/使用说明.md ../shadowrocket-usage.md
+          elif [ -f "使用说明.md" ]; then
+            cp 使用说明.md ../shadowrocket-usage.md
+          else
+            echo "使用说明文件不存在，跳过复制"
+          fi
 
       - name: Generate file checksums
         run: |
