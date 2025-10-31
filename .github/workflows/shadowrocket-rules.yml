@@ -87,36 +87,17 @@ jobs:
           echo "Generated Shadowrocket rule files:"
           ls -la *.conf *.config *.list *.md *.sha256sum 2>/dev/null || echo "No files found"
 
-      - name: Git push assets to "release" branch
+      - name: Push to release branch
         run: |
           cd code
           git init
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # 设置远程仓库
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
-          
-          # 尝试获取现有的 release 分支
-          git fetch origin release:release 2>/dev/null || echo "Release branch does not exist, will create new one"
-          
-          # 切换到 release 分支（如果存在）或创建新的
-          git checkout release 2>/dev/null || git checkout -b release
-          
-          # 清理旧文件（只保留 Shadowrocket 相关文件）
-          git rm -rf . 2>/dev/null || true
-          
-          # 添加 Shadowrocket 相关文件
+          git checkout -b release
           git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
-          
-          # 检查是否有文件需要提交
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
-            git push -f -u origin release
-            echo "✅ Successfully pushed Shadowrocket rules to release branch"
-          fi
+          git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git push -f -u origin release
 
       - name: Create build summary
         run: |
