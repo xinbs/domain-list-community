@@ -100,7 +100,9 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
-            git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+            # 设置远程仓库（如果已存在则更新）
+            git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" 2>/dev/null || \
+            git remote set-url origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
             git push -f -u origin release
             echo "✅ Successfully pushed Shadowrocket rules to release branch"
           fi
