@@ -96,6 +96,7 @@ jobs:
           git checkout -b release
           git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
           git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
+          git remote rm origin 2>/dev/null || true
           git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
           git push -f -u origin release
 
