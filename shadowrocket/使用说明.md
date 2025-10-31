@@ -1,0 +1,78 @@
+# Shadowrocket 规则使用说明
+
+## 🎉 构建成功！
+
+您的 Shadowrocket 规则已成功生成，包含以下文件：
+
+### 📁 生成的文件
+
+1. **`Shadowrocket_gfwlist.conf`** (923KB, 26,880 行)
+   - 仅包含 GFWList 规则
+   - 22,788 个被 GFW 屏蔽的域名
+   - 4,242 个中国大陆 IP 段直连
+
+2. **`Shadowrocket_gfwlist_ad.conf`** (2.7MB, 73,217 行)
+   - 包含 GFWList + 广告过滤规则
+   - 46,335 个广告域名拦截
+   - 22,788 个被 GFW 屏蔽的域名
+   - 4,242 个中国大陆 IP 段直连
+
+### 📱 如何导入 Shadowrocket
+
+1. **下载配置文件**
+   - 将 `.conf` 文件传输到您的 iOS 设备
+
+2. **导入到 Shadowrocket**
+   - 打开 Shadowrocket 应用
+   - 点击右上角 "+" 按钮
+   - 选择 "从文件导入"
+   - 选择对应的 `.conf` 文件
+
+3. **启用配置**
+   - 在配置列表中选择导入的配置
+   - 启用 Shadowrocket 开关
+
+### 🔧 规则优先级
+
+规则按以下优先级执行：
+
+1. **广告过滤** (仅 `_ad` 版本) - `REJECT`
+2. **中国大陆 IP** - `DIRECT`
+3. **GFW 屏蔽域名** - `PROXY`
+4. **其他流量** - 根据 GeoIP 判断
+
+### 📊 数据来源
+
+- **GFWList**: [domain-list-community](https://github.com/v2fly/domain-list-community)
+- **中国 IP**: [ispip.clang.cn](https://ispip.clang.cn/all_cn.html)
+- **广告过滤**: EasyList China, EasyList, 乘风规则, Peter Lowe's ad servers
+
+### 🔄 更新规则
+
+要更新规则，请重新运行构建脚本：
+
+```bash
+cd shadowrocket
+source ../shadowrocket_env/bin/activate
+python build_shadowrocket_rules.py
+```
+
+### ⚠️ 注意事项
+
+- 建议定期更新规则以获得最新的域名和 IP 数据
+- 如果遇到特定网站访问问题，可以在 Shadowrocket 中添加自定义规则
+- `_ad` 版本文件较大，加载可能需要更多时间
+
+### 🆘 故障排除
+
+如果遇到问题：
+
+1. 确保 Shadowrocket 版本支持导入的配置格式
+2. 检查代理服务器设置是否正确
+3. 尝试重新导入配置文件
+4. 查看 Shadowrocket 日志获取详细错误信息
+
+---
+
+**构建时间**: 2025-10-31 08:10:19  
+**项目地址**: https://github.com/v2fly/domain-list-community
