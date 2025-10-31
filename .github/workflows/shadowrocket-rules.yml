@@ -56,16 +56,8 @@ jobs:
         run: |
           cd code/shadowrocket
           source shadowrocket_env/bin/activate
-          
-          # 运行所有 Shadowrocket 规则生成脚本
-          echo "Building GFWList rules..."
+          echo "Building Shadowrocket rules via main script..."
           python build_shadowrocket_rules.py
-          
-          echo "Building GFWList + AD blocking rules..."
-          python convert_gfwlist_ad.py
-          
-          echo "Building China IP bypass rules..."
-          python fetch_cn_ip_bypass.py
 
       - name: Generate file checksums
         run: |
