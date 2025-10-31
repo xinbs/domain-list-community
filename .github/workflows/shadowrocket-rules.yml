@@ -36,9 +36,9 @@ jobs:
           echo "BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
         shell: bash
 
-      - name: Install Python dependencies
+      - name: Setup Python environment for Shadowrocket
         run: |
-          cd code/shadowrocket
+          cd shadowrocket
           python -m venv shadowrocket_env
           source shadowrocket_env/bin/activate
           pip install --upgrade pip
@@ -46,7 +46,7 @@ jobs:
 
       - name: Build Shadowrocket rules
         run: |
-          cd code/shadowrocket
+          cd shadowrocket
           source shadowrocket_env/bin/activate
           
           # 运行所有 Shadowrocket 规则生成脚本
@@ -58,38 +58,28 @@ jobs:
           
           echo "Building China IP bypass rules..."
           python fetch_cn_ip_bypass.py
-          
-          # 复制生成的文件到根目录
-          cp resultant/*.conf ../
-          cp resultant/*.config ../
-          cp resultant/*.list ../
-          # 复制使用说明文件（如果存在）
-          if [ -f "resultant/使用说明.md" ]; then
-            cp resultant/使用说明.md ../shadowrocket-usage.md
-          elif [ -f "使用说明.md" ]; then
-            cp 使用说明.md ../shadowrocket-usage.md
-          else
-            echo "使用说明文件不存在，跳过复制"
-          fi
 
       - name: Generate file checksums
         run: |
-          cd code
-          for file in *.conf *.config *.list shadowrocket-usage.md; do
+          cd shadowrocket/resultant
+          for file in *.conf *.config *.list; do
             if [ -f "$file" ]; then
               sha256sum "$file" > "$file.sha256sum"
             fi
           done
+          # 为使用说明文件生成校验和（如果存在）
+          if [ -f "../使用说明.md" ]; then
+            sha256sum "../使用说明.md" > "shadowrocket-usage.md.sha256sum"
+          fi
 
       - name: List generated files
         run: |
-          cd code
+          cd shadowrocket/resultant
           echo "Generated Shadowrocket rule files:"
-          ls -la *.conf *.config *.list *.md *.sha256sum 2>/dev/null || echo "No files found"
+          ls -la *.conf *.config *.list *.sha256sum 2>/dev/null || echo "No files found"
 
       - name: Push to release branch
         run: |
-          cd code
           # 配置 Git 用户信息
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -99,7 +89,14 @@ jobs:
           git checkout release 2>/dev/null || true
           
           # 添加 Shadowrocket 相关文件
-          git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
+          git add shadowrocket/resultant/*.conf shadowrocket/resultant/*.config shadowrocket/resultant/*.list shadowrocket/resultant/*.sha256sum 2>/dev/null || true
+          # 添加使用说明文件（如果存在）
+          if [ -f "shadowrocket/使用说明.md" ]; then
+            git add shadowrocket/使用说明.md
+          fi
+          if [ -f "shadowrocket/resultant/shadowrocket-usage.md.sha256sum" ]; then
+            git add shadowrocket/resultant/shadowrocket-usage.md.sha256sum
+          fi
           
           # 检查是否有变更需要提交
           if git diff --staged --quiet; then
@@ -111,18 +108,18 @@ jobs:
 
       - name: Create build summary
         run: |
-          cd code
+          cd shadowrocket/resultant
           echo "## 🎯 Shadowrocket Rules Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "**Build Time:** ${{ env.BUILD_TIME }}" >> $GITHUB_STEP_SUMMARY
           echo "**Release Name:** ${{ env.RELEASE_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📁 Generated Files:" >> $GITHUB_STEP_SUMMARY
-          for file in *.conf *.config *.list shadowrocket-usage.md; do
+          for file in *.conf *.config *.list; do
             if [ -f "$file" ]; then
-              size=$(ls -lh "$file" | awk '{print $5}')
-              echo "- **$file** ($size)" >> $GITHUB_STEP_SUMMARY
+              size=$(stat -c%s "$file")
+              echo "- **$file** (${size} bytes)" >> $GITHUB_STEP_SUMMARY
             fi
           done
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔗 Usage:" >> $GITHUB_STEP_SUMMARY
-          echo "Files are available in the \`release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Usage Instructions:" >> $GITHUB_STEP_SUMMARY
+          echo "Generated files are available in the \`release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY
