@@ -116,7 +116,14 @@ jobs:
             echo "No changes to commit for Shadowrocket rules"
           else
             git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
-            git push origin release
+            # 推送，如遇非快进失败则回退并重试
+            if git push origin release; then
+              echo "[INFO] Push succeeded"
+            else
+              echo "[WARN] Push rejected (non-fast-forward). Attempting rebase..."
+              git pull --rebase origin release
+              git push origin release
+            fi
           fi
 
       - name: Create build summary
