@@ -87,18 +87,18 @@ jobs:
           echo "Generated Shadowrocket rule files:"
           ls -la *.conf *.config *.list *.md *.sha256sum 2>/dev/null || echo "No files found"
 
-      - name: Push to release branch
+      - name: Push to shadowrocket-release branch
         run: |
           cd code
           git init
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b release
+          git checkout -b shadowrocket-release
           git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
           git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
           git remote rm origin 2>/dev/null || true
           git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
-          git push -f -u origin release
+          git push -f -u origin shadowrocket-release
 
       - name: Create build summary
         run: |
@@ -116,4 +116,4 @@ jobs:
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Usage:" >> $GITHUB_STEP_SUMMARY
-          echo "Files are available in the \`release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY
+          echo "Files are available in the \`shadowrocket-release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY
