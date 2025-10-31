@@ -38,7 +38,7 @@ jobs:
 
       - name: Setup Python environment for Shadowrocket
         run: |
-          cd shadowrocket
+          cd code/shadowrocket
           python -m venv shadowrocket_env
           source shadowrocket_env/bin/activate
           pip install --upgrade pip
@@ -46,7 +46,7 @@ jobs:
 
       - name: Build Shadowrocket rules
         run: |
-          cd shadowrocket
+          cd code/shadowrocket
           source shadowrocket_env/bin/activate
           
           # 运行所有 Shadowrocket 规则生成脚本
@@ -61,7 +61,7 @@ jobs:
 
       - name: Generate file checksums
         run: |
-          cd shadowrocket/resultant
+          cd code/shadowrocket/resultant
           for file in *.conf *.config *.list; do
             if [ -f "$file" ]; then
               sha256sum "$file" > "$file.sha256sum"
@@ -74,12 +74,13 @@ jobs:
 
       - name: List generated files
         run: |
-          cd shadowrocket/resultant
+          cd code/shadowrocket/resultant
           echo "Generated Shadowrocket rule files:"
           ls -la *.conf *.config *.list *.sha256sum 2>/dev/null || echo "No files found"
 
       - name: Push to release branch
         run: |
+          cd code
           # 配置 Git 用户信息
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -108,7 +109,7 @@ jobs:
 
       - name: Create build summary
         run: |
-          cd shadowrocket/resultant
+          cd code/shadowrocket/resultant
           echo "## 🎯 Shadowrocket Rules Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "**Build Time:** ${{ env.BUILD_TIME }}" >> $GITHUB_STEP_SUMMARY
           echo "**Release Name:** ${{ env.RELEASE_NAME }}" >> $GITHUB_STEP_SUMMARY
