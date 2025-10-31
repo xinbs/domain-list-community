@@ -26,6 +26,13 @@ jobs:
           path: code
           fetch-depth: 0
 
+      - name: Checkout release branch for publishing
+        uses: actions/checkout@v4
+        with:
+          path: release
+          ref: release
+          fetch-depth: 0
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -79,40 +86,45 @@ jobs:
           echo "Generated Shadowrocket rule files:"
           ls -la *.conf *.config *.list *.sha256sum 2>/dev/null || echo "No files found"
 
-      - name: Push to release branch
+      - name: Publish artifacts to release branch
         run: |
-          cd code
           # 配置 Git 用户信息
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # 检出或创建 release 分支
-          git fetch origin release:release 2>/dev/null || git checkout --orphan release
-          git checkout release 2>/dev/null || true
-          echo "[DEBUG] 当前分支: $(git branch --show-current)"
-          echo "[DEBUG] 仓库根目录: $(pwd)"
-          echo "[DEBUG] 列出生成目录内容 (shadowrocket/resultant):"
-          ls -la shadowrocket/resultant || true
-          
-          # 添加 Shadowrocket 相关文件
-          echo "[DEBUG] 执行 git add -A shadowrocket/resultant"
-          git add -A shadowrocket/resultant || true
-          # 添加使用说明文件（如果存在）
-          if [ -f "shadowrocket/使用说明.md" ]; then
-            git add shadowrocket/使用说明.md
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          echo "[DEBUG] 工作目录结构:"
+          ls -la
+          ls -la code/shadowrocket/resultant || true
+          ls -la release || true
+
+          # 准备目标目录
+          mkdir -p release/shadowrocket/resultant
+
+          # 从构建目录复制生成文件到发布目录
+          echo "[DEBUG] 复制生成文件到 release/shadowrocket/resultant"
+          cp -v code/shadowrocket/resultant/*.conf release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.config release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.list release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.sha256sum release/shadowrocket/resultant/ 2>/dev/null || true
+          # 复制使用说明及其校验（如果存在）
+          if [ -f "code/shadowrocket/使用说明.md" ]; then
+            cp -v code/shadowrocket/使用说明.md release/shadowrocket/使用说明.md
           fi
-          if [ -f "shadowrocket/resultant/shadowrocket-usage.md.sha256sum" ]; then
-            git add shadowrocket/resultant/shadowrocket-usage.md.sha256sum
+          if [ -f "code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum" ]; then
+            cp -v code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum release/shadowrocket/resultant/shadowrocket-usage.md.sha256sum
           fi
-          echo "[DEBUG] 暂存区文件列表:" && git diff --staged --name-only || true
-          
-          # 检查是否有变更需要提交
+
+          echo "[DEBUG] 列出准备提交的文件:"
+          ls -la release/shadowrocket/resultant || true
+
+          # 在 release 工作副本内提交并推送
+          cd release
+          git add -A shadowrocket
           if git diff --staged --quiet; then
             echo "No changes to commit for Shadowrocket rules"
           else
             git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
-            echo "[DEBUG] 推送到远程 release 分支"
-            git push origin HEAD:release
+            git push origin release
           fi
 
       - name: Create build summary
