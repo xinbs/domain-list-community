@@ -11,6 +11,9 @@ on:
       - "shadowrocket/**"
       - ".github/workflows/shadowrocket-rules.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build-shadowrocket-rules:
     name: Build Shadowrocket Rules
@@ -90,7 +93,18 @@ jobs:
           git init
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b release
+          
+          # 设置远程仓库
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          
+          # 尝试获取现有的 release 分支
+          git fetch origin release:release 2>/dev/null || echo "Release branch does not exist, will create new one"
+          
+          # 切换到 release 分支（如果存在）或创建新的
+          git checkout release 2>/dev/null || git checkout -b release
+          
+          # 清理旧文件（只保留 Shadowrocket 相关文件）
+          git rm -rf . 2>/dev/null || true
           
           # 添加 Shadowrocket 相关文件
           git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
@@ -100,9 +114,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
-            # 设置远程仓库（如果已存在则更新）
-            git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" 2>/dev/null || \
-            git remote set-url origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
             git push -f -u origin release
             echo "✅ Successfully pushed Shadowrocket rules to release branch"
           fi
