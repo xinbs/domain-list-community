@@ -87,18 +87,27 @@ jobs:
           echo "Generated Shadowrocket rule files:"
           ls -la *.conf *.config *.list *.md *.sha256sum 2>/dev/null || echo "No files found"
 
-      - name: Push to shadowrocket-release branch
+      - name: Push to release branch
         run: |
           cd code
-          git init
+          # 配置 Git 用户信息
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b shadowrocket-release
+          
+          # 检出或创建 release 分支
+          git fetch origin release:release 2>/dev/null || git checkout --orphan release
+          git checkout release 2>/dev/null || true
+          
+          # 添加 Shadowrocket 相关文件
           git add *.conf *.config *.list shadowrocket-usage.md *.sha256sum 2>/dev/null || true
-          git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
-          git remote rm origin 2>/dev/null || true
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
-          git push -f -u origin shadowrocket-release
+          
+          # 检查是否有变更需要提交
+          if git diff --staged --quiet; then
+            echo "No changes to commit for Shadowrocket rules"
+          else
+            git commit -m "🚀 Auto-build Shadowrocket rules - ${{ env.BUILD_TIME }}"
+            git push origin release
+          fi
 
       - name: Create build summary
         run: |
@@ -116,4 +125,4 @@ jobs:
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Usage:" >> $GITHUB_STEP_SUMMARY
-          echo "Files are available in the \`shadowrocket-release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY
+          echo "Files are available in the \`release\` branch for direct import into Shadowrocket." >> $GITHUB_STEP_SUMMARY
