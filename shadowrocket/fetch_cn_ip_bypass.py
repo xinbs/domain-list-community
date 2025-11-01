@@ -124,6 +124,17 @@ def generate_shadowrocket_bypass_config(ip_ranges, output_file='resultant/Shadow
     config_lines.append("# 最终规则")
     config_lines.append("FINAL,PROXY")
     
+    # 添加 URL Rewrite 部分
+    config_lines.append("")
+    config_lines.append("[URL Rewrite]")
+    config_lines.append("# URL 重写规则")
+    config_lines.append("")
+    
+    # 添加 MITM 部分
+    config_lines.append("[MITM]")
+    config_lines.append("# HTTPS 解密")
+    config_lines.append("enable = false")
+    
     # 写入文件
     try:
         with open(output_path, 'w', encoding='utf-8') as f:
