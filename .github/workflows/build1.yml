@@ -12,12 +12,22 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-branch-publish
+      cancel-in-progress: false
 
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v4
         with:
           path: code
+
+      - name: Checkout release branch for publishing
+        uses: actions/checkout@v4
+        with:
+          path: release
+          ref: release
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -33,36 +43,54 @@ jobs:
       - name: Build dlc.dat file
         run: |
           cd code || exit 1
-          go run ./ --outputdir=../ --exportlists=category-ads-all,tld-cn,cn,tld-\!cn,geolocation-\!cn,apple,icloud
-          mv -f gfwlist.txt ../
-          cd ../ && rm -rf code
-          ls
+          go run ./ --outputdir=../release --exportlists=category-ads-all,tld-cn,cn,tld-\!cn,geolocation-\!cn,apple,icloud
+          # gfwlist.txt 是单独文件，输出到 release 工作副本
+          if [ -f gfwlist.txt ]; then
+            mv -f gfwlist.txt ../release/
+          fi
+          ls -la ../release
 
       - name: Generate dlc.dat sha256 hash
         run: |
+          cd release
           sha256sum dlc.dat > dlc.dat.sha256sum
 
       - name: Generate Zip
         run: |
+          cd release
           zip -9 dlc.dat.zip dlc.dat
           sha256sum dlc.dat.zip > dlc.dat.zip.sha256sum
 
       - name: Generate XZ
         run: |
+          cd release
           xz -z -9 -k dlc.dat
           sha256sum dlc.dat.xz > dlc.dat.xz.sha256sum
 
       - name: Generate gfwlist.txt sha256 hash
         run: |
-          sha256sum gfwlist.txt > gfwlist.txt.sha256sum
+          cd release
+          if [ -f gfwlist.txt ]; then
+            sha256sum gfwlist.txt > gfwlist.txt.sha256sum
+          fi
 
-      - name: Git push assets to "release" branch
+      - name: Commit and push assets to release branch
         run: |
-          git init
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b release
-          git add *.txt *.sha256sum dlc.dat dlc.dat.zip dlc.dat.xz
-          git commit -m "${{ env.RELEASE_NAME }}"
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
-          git push -f -u origin release
+          cd release
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "[DEBUG] Preparing to commit assets in release working copy"
+          ls -la
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit for dlc.dat assets"
+          else
+            git commit -m "${{ env.RELEASE_NAME }}"
+            if git push origin release; then
+              echo "[INFO] Pushed dlc assets to release branch"
+            else
+              echo "[WARN] Push rejected (non-fast-forward). Attempting rebase and retry..."
+              git pull --rebase origin release
+              git push origin release
+            fi
+          fi
