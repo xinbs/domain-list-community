@@ -23,6 +23,7 @@ var (
 	outputName  = flag.String("outputname", "dlc.dat", "Name of the generated dat file")
 	outputDir   = flag.String("outputdir", "./", "Directory to place all generated files")
 	exportLists = flag.String("exportlists", "", "Lists to be flattened and exported in plaintext format, separated by ',' comma")
+	shadowrocket = flag.Bool("shadowrocket", false, "Generate Shadowrocket compatible rules")
 )
 
 var (
@@ -511,7 +512,7 @@ func main() {
 		protoList.Entry = append(protoList.Entry, site)
 
 		// Export GfwList
-		if siteName == "GEOLOCATION-!CN" {
+		if *shadowrocket && siteName == "GEOLOCATION-!CN" {
 			pl := plMap[siteName]
 			if err := exportGFWList(pl); err != nil {
 				fmt.Println("Failed: ", err)
