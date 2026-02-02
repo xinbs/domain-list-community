@@ -117,6 +117,23 @@ jobs:
           if git rev-parse --verify origin/release >/dev/null 2>&1; then
             git reset --hard origin/release
           fi
+          
+          # 重新确保目录存在（防止 reset 删除）并复制文件
+          cd ..
+          mkdir -p release/shadowrocket/resultant
+          echo "[DEBUG] 重新复制生成文件到 release/shadowrocket/resultant"
+          cp -v code/shadowrocket/resultant/*.conf release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.config release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.list release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.sha256sum release/shadowrocket/resultant/ 2>/dev/null || true
+          if [ -f "code/shadowrocket/使用说明.md" ]; then
+            cp -v code/shadowrocket/使用说明.md release/shadowrocket/使用说明.md
+          fi
+          if [ -f "code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum" ]; then
+            cp -v code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum release/shadowrocket/resultant/shadowrocket-usage.md.sha256sum
+          fi
+          
+          cd release
           git add -A shadowrocket
           if git diff --staged --quiet; then
             echo "No changes to commit for Shadowrocket rules"
