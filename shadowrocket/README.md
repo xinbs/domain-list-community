@@ -82,6 +82,24 @@ python convert_gfwlist_ad.py
 4. 选择对应的配置文件
 5. 启用配置并开始使用
 
+## 下载地址（release 分支）
+
+### 规则文件
+
+- Shadowrocket_gfwlist.conf: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/resultant/Shadowrocket_gfwlist.conf
+- Shadowrocket_gfwlist_ad.conf: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/resultant/Shadowrocket_gfwlist_ad.conf
+- Shadowrocket_gfwlist.txt（标准 GFWList Base64）: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/resultant/Shadowrocket_gfwlist.txt
+
+### 规则数据源
+
+- cn_ip.list（中国大陆 IP 段）: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/resultant/cn_ip.list
+- ad.list（广告域名列表）: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/resultant/ad.list
+
+### 文档
+
+- 使用说明: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/使用说明.md
+- README: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/README.md
+
 ## 文件结构
 
 ```
