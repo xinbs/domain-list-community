@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "30 0 * * *"  # 每天 00:30 UTC 运行
-  push:
+  workflow_run:
+    workflows: ["Build dlc.dat"]
+    types:
+      - completed
     branches:
       - master
-    paths:
-      - "shadowrocket/resultant/**"
-      - ".github/workflows/shadowrocket-rules.yml"
 
 permissions:
   contents: write
