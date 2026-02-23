@@ -71,6 +71,9 @@ jobs:
           if [ -f "../使用说明.md" ]; then
             sha256sum "../使用说明.md" > "shadowrocket-usage.md.sha256sum"
           fi
+          if [ -f "../README.md" ]; then
+            sha256sum "../README.md" > "shadowrocket-readme.md.sha256sum"
+          fi
 
       - name: List generated files
         run: |
@@ -104,8 +107,14 @@ jobs:
           if [ -f "code/shadowrocket/使用说明.md" ]; then
             cp -v code/shadowrocket/使用说明.md release/shadowrocket/使用说明.md
           fi
+          if [ -f "code/shadowrocket/README.md" ]; then
+            cp -v code/shadowrocket/README.md release/shadowrocket/README.md
+          fi
           if [ -f "code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum" ]; then
             cp -v code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum release/shadowrocket/resultant/shadowrocket-usage.md.sha256sum
+          fi
+          if [ -f "code/shadowrocket/resultant/shadowrocket-readme.md.sha256sum" ]; then
+            cp -v code/shadowrocket/resultant/shadowrocket-readme.md.sha256sum release/shadowrocket/resultant/shadowrocket-readme.md.sha256sum
           fi
 
           echo "[DEBUG] 列出准备提交的文件:"
@@ -131,8 +140,14 @@ jobs:
           if [ -f "code/shadowrocket/使用说明.md" ]; then
             cp -v code/shadowrocket/使用说明.md release/shadowrocket/使用说明.md
           fi
+          if [ -f "code/shadowrocket/README.md" ]; then
+            cp -v code/shadowrocket/README.md release/shadowrocket/README.md
+          fi
           if [ -f "code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum" ]; then
             cp -v code/shadowrocket/resultant/shadowrocket-usage.md.sha256sum release/shadowrocket/resultant/shadowrocket-usage.md.sha256sum
+          fi
+          if [ -f "code/shadowrocket/resultant/shadowrocket-readme.md.sha256sum" ]; then
+            cp -v code/shadowrocket/resultant/shadowrocket-readme.md.sha256sum release/shadowrocket/resultant/shadowrocket-readme.md.sha256sum
           fi
           
           cd release
