@@ -62,7 +62,7 @@ jobs:
       - name: Generate file checksums
         run: |
           cd code/shadowrocket/resultant
-          for file in *.conf *.config *.list; do
+          for file in *.conf *.config *.list *.txt; do
             if [ -f "$file" ]; then
               sha256sum "$file" > "$file.sha256sum"
             fi
@@ -76,7 +76,7 @@ jobs:
         run: |
           cd code/shadowrocket/resultant
           echo "Generated Shadowrocket rule files:"
-          ls -la *.conf *.config *.list *.sha256sum 2>/dev/null || echo "No files found"
+          ls -la *.conf *.config *.list *.txt *.sha256sum 2>/dev/null || echo "No files found"
 
       - name: Publish artifacts to release branch
         run: |
@@ -99,6 +99,7 @@ jobs:
           cp -v code/shadowrocket/resultant/*.config release/shadowrocket/resultant/ 2>/dev/null || true
           cp -v code/shadowrocket/resultant/*.list release/shadowrocket/resultant/ 2>/dev/null || true
           cp -v code/shadowrocket/resultant/*.sha256sum release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.txt release/shadowrocket/resultant/ 2>/dev/null || true
           # 复制使用说明及其校验（如果存在）
           if [ -f "code/shadowrocket/使用说明.md" ]; then
             cp -v code/shadowrocket/使用说明.md release/shadowrocket/使用说明.md
@@ -126,6 +127,7 @@ jobs:
           cp -v code/shadowrocket/resultant/*.config release/shadowrocket/resultant/ 2>/dev/null || true
           cp -v code/shadowrocket/resultant/*.list release/shadowrocket/resultant/ 2>/dev/null || true
           cp -v code/shadowrocket/resultant/*.sha256sum release/shadowrocket/resultant/ 2>/dev/null || true
+          cp -v code/shadowrocket/resultant/*.txt release/shadowrocket/resultant/ 2>/dev/null || true
           if [ -f "code/shadowrocket/使用说明.md" ]; then
             cp -v code/shadowrocket/使用说明.md release/shadowrocket/使用说明.md
           fi
@@ -157,7 +159,7 @@ jobs:
           echo "**Release Name:** ${{ env.RELEASE_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📁 Generated Files:" >> $GITHUB_STEP_SUMMARY
-          for file in *.conf *.config *.list; do
+          for file in *.conf *.config *.list *.txt; do
             if [ -f "$file" ]; then
               size=$(stat -c%s "$file")
               echo "- **$file** (${size} bytes)" >> $GITHUB_STEP_SUMMARY
