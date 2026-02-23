@@ -9,10 +9,10 @@
 import os
 import sys
 import time
-from convert_gfwlist import DomainListParser, load_cn_ip_ranges, load_ad_domains, load_whitelist_rules, save_shadowrocket_rules
+from convert_gfwlist import DomainListParser, load_cn_ip_ranges, load_ad_domains, load_proxy_rules, load_whitelist_rules, save_shadowrocket_rules
 
 
-def convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges=None, ad_domains=None, whitelist_rules=None):
+def convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges=None, ad_domains=None, whitelist_rules=None, proxy_rules=None):
     """转换为 Shadowrocket 规则格式（包含广告过滤）"""
     rules = []
     
@@ -48,6 +48,10 @@ def convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges=None, ad_domains=
         rules.append('# 广告过滤规则')
         for domain in ad_domains:
             rules.append(f'DOMAIN-SUFFIX,{domain},REJECT')
+        rules.append('')
+
+    if proxy_rules:
+        rules.extend(proxy_rules)
         rules.append('')
     
     # 添加 GFW 域名代理规则
@@ -121,7 +125,16 @@ def main():
         whitelist_rules = load_whitelist_rules()
         if whitelist_rules:
             print(f'加载了 {len(whitelist_rules)} 条白名单规则')
-        gfwlist_ad_rules = convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges, ad_domains, whitelist_rules)
+        proxy_rules = load_proxy_rules()
+        if proxy_rules:
+            print(f'加载了 {len(proxy_rules)} 条代理名单规则')
+        gfwlist_ad_rules = convert_to_shadowrocket_with_ads(
+            gfw_domains,
+            cn_ip_ranges,
+            ad_domains,
+            whitelist_rules,
+            proxy_rules,
+        )
         save_shadowrocket_rules(gfwlist_ad_rules, 'resultant/Shadowrocket_gfwlist_ad.conf')
         
         print('GFWList + 广告过滤转换完成')
