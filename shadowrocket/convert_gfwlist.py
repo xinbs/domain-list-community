@@ -10,6 +10,7 @@ import os
 import re
 import time
 import sys
+import base64
 from pathlib import Path
 
 
@@ -327,6 +328,99 @@ def normalize_custom_rule(line, action):
     return None
 
 
+def load_custom_entries(file_path):
+    entries = []
+    if not os.path.exists(file_path):
+        return entries
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                entry = normalize_custom_entry(line)
+                if entry:
+                    entries.append(entry)
+    except Exception as e:
+        print(f'错误: 读取自定义名单失败: {e}')
+    return entries
+
+
+def normalize_custom_entry(line):
+    rule_types = {'DOMAIN-SUFFIX', 'DOMAIN', 'DOMAIN-KEYWORD', 'IP-CIDR'}
+    parts = [p.strip() for p in line.split(',')]
+    if parts and parts[0] in rule_types:
+        if len(parts) < 2:
+            return None
+        rule_type = parts[0]
+        value = parts[1]
+        if rule_type == 'IP-CIDR':
+            return None
+        if rule_type == 'DOMAIN':
+            return {'type': 'full', 'value': value}
+        if rule_type == 'DOMAIN-KEYWORD':
+            return {'type': 'keyword', 'value': value}
+        return {'type': 'domain', 'value': value}
+    if line.startswith('full:'):
+        return {'type': 'full', 'value': line[5:].strip()}
+    if line.startswith('keyword:'):
+        return {'type': 'keyword', 'value': line[8:].strip()}
+    if line.startswith('regexp:'):
+        return {'type': 'regexp', 'value': line[7:].strip()}
+    if re.match(r'^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$', line):
+        return None
+    return {'type': 'domain', 'value': line}
+
+
+def build_gfwlist_content(gfw_domains, whitelist_entries=None, proxy_entries=None):
+    lines = []
+    lines.append('[AutoProxy 0.2.9]')
+    lines.append(f'! Last Modified: {time.strftime("%Y-%m-%d %H:%M:%S")}')
+    lines.append('! Expires: 24h')
+    lines.append('! HomePage: https://github.com/v2fly/domain-list-community')
+    lines.append('! GitHub URL: https://raw.githubusercontent.com/v2fly/domain-list-community/release/gfwlist.txt')
+    lines.append('! jsdelivr URL: https://cdn.jsdelivr.net/gh/v2fly/domain-list-community@release/gfwlist.txt')
+    lines.append('')
+
+    if whitelist_entries:
+        for entry in whitelist_entries:
+            lines.extend(format_gfwlist_entry(entry, True))
+        lines.append('')
+
+    if proxy_entries:
+        for entry in proxy_entries:
+            lines.extend(format_gfwlist_entry(entry, False))
+        lines.append('')
+
+    for entry in gfw_domains:
+        lines.extend(format_gfwlist_entry(entry, False))
+
+    return '\n'.join(lines) + '\n'
+
+
+def format_gfwlist_entry(entry, is_whitelist):
+    prefix = '@@' if is_whitelist else ''
+    entry_type = entry['type']
+    value = entry['value']
+    if entry_type == 'domain':
+        return [f'{prefix}||{value}']
+    if entry_type == 'full':
+        return [f'{prefix}|http://{value}', f'{prefix}|https://{value}']
+    if entry_type == 'keyword':
+        return [f'{prefix}{value}']
+    if entry_type == 'regexp':
+        return [f'{prefix}/{value}/']
+    return []
+
+
+def save_gfwlist(content, output_file):
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    encoded = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(encoded)
+    print(f'GFWList 已保存到: {output_file}')
+
+
 def save_shadowrocket_rules(rules, output_file):
     """保存 Shadowrocket 规则文件"""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -369,6 +463,11 @@ def main():
             proxy_rules=proxy_rules,
         )
         save_shadowrocket_rules(gfwlist_rules, 'resultant/Shadowrocket_gfwlist.conf')
+
+        whitelist_entries = load_custom_entries('whitelist.list')
+        proxy_entries = load_custom_entries('proxy.list')
+        gfwlist_content = build_gfwlist_content(gfw_domains, whitelist_entries, proxy_entries)
+        save_gfwlist(gfwlist_content, 'resultant/Shadowrocket_gfwlist.txt')
         
         print('GFWList 转换完成')
         

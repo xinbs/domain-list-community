@@ -53,6 +53,7 @@ def print_summary():
         ('cn_ip.list', '中国大陆 IP 段'),
         ('ad.list', '广告过滤域名'),
         ('Shadowrocket_gfwlist.conf', 'Shadowrocket GFWList 规则'),
+        ('Shadowrocket_gfwlist.txt', 'Shadowrocket GFWList 文本'),
         ('Shadowrocket_gfwlist_ad.conf', 'Shadowrocket GFWList + 广告过滤规则'),
     ]
     
