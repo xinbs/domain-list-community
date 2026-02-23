@@ -9,10 +9,10 @@
 import os
 import sys
 import time
-from convert_gfwlist import DomainListParser, load_cn_ip_ranges, load_ad_domains, save_shadowrocket_rules
+from convert_gfwlist import DomainListParser, load_cn_ip_ranges, load_ad_domains, load_whitelist_rules, save_shadowrocket_rules
 
 
-def convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges=None, ad_domains=None):
+def convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges=None, ad_domains=None, whitelist_rules=None):
     """转换为 Shadowrocket 规则格式（包含广告过滤）"""
     rules = []
     
@@ -38,6 +38,10 @@ def convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges=None, ad_domains=
     rules.append('# GFWList + 广告过滤规则')
     rules.append('#')
     rules.append('')
+
+    if whitelist_rules:
+        rules.extend(whitelist_rules)
+        rules.append('')
     
     # 添加广告过滤规则（优先级最高）
     if ad_domains:
@@ -114,7 +118,10 @@ def main():
         
         # 生成 Shadowrocket_gfwlist_ad 规则（GFW + 广告过滤）
         print('正在生成 Shadowrocket_gfwlist_ad 规则...')
-        gfwlist_ad_rules = convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges, ad_domains)
+        whitelist_rules = load_whitelist_rules()
+        if whitelist_rules:
+            print(f'加载了 {len(whitelist_rules)} 条白名单规则')
+        gfwlist_ad_rules = convert_to_shadowrocket_with_ads(gfw_domains, cn_ip_ranges, ad_domains, whitelist_rules)
         save_shadowrocket_rules(gfwlist_ad_rules, 'resultant/Shadowrocket_gfwlist_ad.conf')
         
         print('GFWList + 广告过滤转换完成')

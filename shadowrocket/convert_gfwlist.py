@@ -138,7 +138,7 @@ class DomainListParser:
         return list(unique_domains.values())
 
 
-def convert_to_shadowrocket(domains, cn_ip_ranges=None, ad_domains=None):
+def convert_to_shadowrocket(domains, cn_ip_ranges=None, ad_domains=None, whitelist_rules=None):
     """转换为 Shadowrocket 规则格式"""
     rules = []
     
@@ -165,6 +165,10 @@ def convert_to_shadowrocket(domains, cn_ip_ranges=None, ad_domains=None):
     rules.append('#')
     rules.append('')
     
+    if whitelist_rules:
+        rules.extend(whitelist_rules)
+        rules.append('')
+
     # 添加广告过滤规则
     if ad_domains:
         rules.append('# 广告过滤规则')
@@ -257,6 +261,49 @@ def load_ad_domains(file_path='resultant/ad.list'):
     return domains
 
 
+def load_whitelist_rules(file_path='whitelist.list'):
+    rules = []
+    if not os.path.exists(file_path):
+        print(f'警告: 白名单文件不存在 {file_path}')
+        return rules
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                rule = normalize_whitelist_rule(line)
+                if rule:
+                    rules.append(rule)
+    except Exception as e:
+        print(f'错误: 读取白名单文件失败: {e}')
+    return rules
+
+
+def normalize_whitelist_rule(line):
+    rule_types = {'DOMAIN-SUFFIX', 'DOMAIN', 'DOMAIN-KEYWORD', 'IP-CIDR'}
+    actions = {'DIRECT', 'PROXY', 'REJECT'}
+    parts = [p.strip() for p in line.split(',')]
+    if parts and parts[0] in rule_types:
+        if len(parts) >= 3 and parts[-1].upper() == 'NO-RESOLVE':
+            if parts[-2].upper() in actions:
+                parts[-2] = 'DIRECT'
+                return ','.join(parts)
+            parts.insert(-1, 'DIRECT')
+            return ','.join(parts)
+        if len(parts) >= 3 and parts[-1].upper() in actions:
+            parts[-1] = 'DIRECT'
+            return ','.join(parts)
+        if len(parts) == 2:
+            return f'{parts[0]},{parts[1]},DIRECT'
+        return f'{line},DIRECT'
+    if re.match(r'^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$', line):
+        return f'IP-CIDR,{line},DIRECT'
+    if line:
+        return f'DOMAIN-SUFFIX,{line},DIRECT'
+    return None
+
+
 def save_shadowrocket_rules(rules, output_file):
     """保存 Shadowrocket 规则文件"""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -286,7 +333,10 @@ def main():
         
         # 生成 Shadowrocket_gfwlist 规则（仅 GFW）
         print('正在生成 Shadowrocket_gfwlist 规则...')
-        gfwlist_rules = convert_to_shadowrocket(gfw_domains, cn_ip_ranges)
+        whitelist_rules = load_whitelist_rules()
+        if whitelist_rules:
+            print(f'加载了 {len(whitelist_rules)} 条白名单规则')
+        gfwlist_rules = convert_to_shadowrocket(gfw_domains, cn_ip_ranges, whitelist_rules=whitelist_rules)
         save_shadowrocket_rules(gfwlist_rules, 'resultant/Shadowrocket_gfwlist.conf')
         
         print('GFWList 转换完成')
