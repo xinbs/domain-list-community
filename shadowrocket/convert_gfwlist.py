@@ -17,6 +17,9 @@ from pathlib import Path
 SKIP_ATTRS = {'cn'}
 
 SKIP_DOMAIN_SUFFIXES = (
+    'microsoft.com',
+    'microsoftpersonalcontent.com',
+    'onedrive.com',
     'onedrive.live.com',
     'storage.live.com',
     'sharepoint.com',
