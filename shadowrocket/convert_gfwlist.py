@@ -19,6 +19,7 @@ SKIP_ATTRS = {'cn'}
 SKIP_DOMAIN_SUFFIXES = (
     'onedrive.live.com',
     'storage.live.com',
+    'sharepoint.com',
     'windowsupdate.com',
     'dl.delivery.mp.microsoft.com',
     'tlu.dl.delivery.mp.microsoft.com',
