@@ -14,6 +14,17 @@ import base64
 from pathlib import Path
 
 
+SKIP_ATTRS = {'cn'}
+
+SKIP_DOMAIN_SUFFIXES = (
+    'onedrive.live.com',
+    'storage.live.com',
+    'windowsupdate.com',
+    'dl.delivery.mp.microsoft.com',
+    'tlu.dl.delivery.mp.microsoft.com',
+)
+
+
 class DomainListParser:
     def __init__(self, data_path='../data'):
         self.data_path = Path(data_path)
@@ -28,16 +39,17 @@ class DomainListParser:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 for line in f:
-                    line = line.strip()
+                    line = line.split('#', 1)[0].strip()
                     
                     # 跳过空行和注释
-                    if not line or line.startswith('#'):
+                    if not line:
                         continue
                     
                     # 处理 include 指令
                     if line.startswith('include:'):
-                        include_name = line[8:].strip()
-                        includes.append(include_name)
+                        include_name, attrs = self.parse_rule_fields(line[8:])
+                        if include_name and not self.should_skip_attrs(attrs):
+                            includes.append(include_name)
                         continue
                     
                     # 处理域名条目
@@ -51,26 +63,49 @@ class DomainListParser:
             print(f'错误: 解析文件 {file_path} 失败: {e}')
         
         return domains, includes
+
+    def parse_rule_fields(self, rule):
+        """拆分规则主体和属性标记。"""
+        parts = rule.split()
+        if not parts:
+            return '', set()
+        attrs = {part[1:].lower() for part in parts[1:] if part.startswith('@')}
+        return parts[0], attrs
     
     def parse_domain_entry(self, line):
         """解析域名条目"""
-        # 移除属性标记 (@cn, @ads 等)
-        if '@' in line:
-            domain = line.split('@')[0].strip()
-        else:
-            domain = line.strip()
+        rule, attrs = self.parse_rule_fields(line)
+        if self.should_skip_attrs(attrs):
+            return None
         
         # 处理不同的域名类型
-        if line.startswith('full:'):
-            return {'type': 'full', 'value': domain[5:]}
-        elif line.startswith('keyword:'):
-            return {'type': 'keyword', 'value': domain[8:]}
-        elif line.startswith('regexp:'):
-            return {'type': 'regexp', 'value': domain[7:]}
-        elif self.is_valid_domain(domain):
-            return {'type': 'domain', 'value': domain}
-        
-        return None
+        if rule.startswith('full:'):
+            domain = rule[5:]
+            domain_type = 'full'
+        elif rule.startswith('keyword:'):
+            domain = rule[8:]
+            domain_type = 'keyword'
+        elif rule.startswith('regexp:'):
+            domain = rule[7:]
+            domain_type = 'regexp'
+        elif self.is_valid_domain(rule):
+            domain = rule
+            domain_type = 'domain'
+        else:
+            return None
+
+        if self.should_skip_domain(domain):
+            return None
+        return {'type': domain_type, 'value': domain}
+
+    def should_skip_attrs(self, attrs):
+        """跳过在中国大陆可访问的条目。"""
+        return bool(SKIP_ATTRS.intersection(attrs))
+
+    def should_skip_domain(self, domain):
+        """跳过不应放入代理的微软直连/更新域名。"""
+        domain = domain.lower()
+        return any(domain == suffix or domain.endswith('.' + suffix) for suffix in SKIP_DOMAIN_SUFFIXES)
     
     def is_valid_domain(self, domain):
         """验证域名格式"""
