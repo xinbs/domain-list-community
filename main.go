@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,10 +20,11 @@ import (
 )
 
 var (
-	dataPath    = flag.String("datapath", "./data", "Path to your custom 'data' directory")
-	outputName  = flag.String("outputname", "dlc.dat", "Name of the generated dat file")
-	outputDir   = flag.String("outputdir", "./", "Directory to place all generated files")
-	exportLists = flag.String("exportlists", "", "Lists to be flattened and exported in plaintext format, separated by ',' comma")
+	dataPath     = flag.String("datapath", "./data", "Path to your custom 'data' directory")
+	outputName   = flag.String("outputname", "dlc.dat", "Name of the generated dat file")
+	outputDir    = flag.String("outputdir", "./", "Directory to place all generated files")
+	datProfile   = flag.String("datprofile", "", "Path of config file used to assemble custom dats")
+	exportLists  = flag.String("exportlists", "", "Lists to be flattened and exported in plaintext format, separated by ',' comma")
 	shadowrocket = flag.Bool("shadowrocket", false, "Generate Shadowrocket compatible rules")
 )
 
@@ -51,7 +53,24 @@ type Processor struct {
 	cirIncMap map[string]bool
 }
 
-func makeProtoList(listName string, entries []*Entry) (*router.GeoSite, error) {
+type GeoSites struct {
+	Sites   []*router.GeoSite
+	SiteIdx map[string]int
+}
+
+type DatTask struct {
+	Name  string   `json:"name"`
+	Mode  string   `json:"mode"`
+	Lists []string `json:"lists"`
+}
+
+const (
+	ModeAll       string = "all"
+	ModeAllowlist string = "allowlist"
+	ModeDenylist  string = "denylist"
+)
+
+func makeProtoList(listName string, entries []*Entry) *router.GeoSite {
 	site := &router.GeoSite{
 		CountryCode: listName,
 		Domain:      make([]*router.Domain, 0, len(entries)),
@@ -77,7 +96,91 @@ func makeProtoList(listName string, entries []*Entry) (*router.GeoSite, error) {
 		}
 		site.Domain = append(site.Domain, pdomain)
 	}
-	return site, nil
+	return site
+}
+
+func loadTasks(path string) ([]DatTask, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var tasks []DatTask
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&tasks); err != nil {
+		return nil, fmt.Errorf("failed to decode json: %w", err)
+	}
+	for i, t := range tasks {
+		if t.Name == "" {
+			return nil, fmt.Errorf("task[%d]: name is required", i)
+		}
+		switch t.Mode {
+		case ModeAll, ModeAllowlist, ModeDenylist:
+		default:
+			return nil, fmt.Errorf("task[%d] %q: invalid mode %q", i, t.Name, t.Mode)
+		}
+	}
+	return tasks, nil
+}
+
+func (gs *GeoSites) assembleDat(task DatTask) error {
+	datFileName := strings.ToLower(filepath.Base(task.Name))
+	geoSiteList := new(router.GeoSiteList)
+
+	switch task.Mode {
+	case ModeAll:
+		geoSiteList.Entry = gs.Sites
+	case ModeAllowlist:
+		allowedIdxes := make([]int, 0, len(task.Lists))
+		for _, list := range task.Lists {
+			if idx, ok := gs.SiteIdx[strings.ToUpper(list)]; ok {
+				allowedIdxes = append(allowedIdxes, idx)
+			} else {
+				return fmt.Errorf("list %q not found for allowlist task", list)
+			}
+		}
+		slices.Sort(allowedIdxes)
+		allowedlen := len(allowedIdxes)
+		if allowedlen == 0 {
+			return fmt.Errorf("allowlist needs at least one valid list")
+		}
+		geoSiteList.Entry = make([]*router.GeoSite, allowedlen)
+		for i, idx := range allowedIdxes {
+			geoSiteList.Entry[i] = gs.Sites[idx]
+		}
+	case ModeDenylist:
+		deniedMap := make(map[int]bool, len(task.Lists))
+		for _, list := range task.Lists {
+			if idx, ok := gs.SiteIdx[strings.ToUpper(list)]; ok {
+				deniedMap[idx] = true
+			} else {
+				fmt.Printf("[Warn] list %q not found in denylist task %q", list, task.Name)
+			}
+		}
+		deniedlen := len(deniedMap)
+		if deniedlen == 0 {
+			fmt.Printf("[Warn] nothing to deny in task %q", task.Name)
+			geoSiteList.Entry = gs.Sites
+		} else {
+			geoSiteList.Entry = make([]*router.GeoSite, 0, len(gs.Sites)-deniedlen)
+			for i, site := range gs.Sites {
+				if !deniedMap[i] {
+					geoSiteList.Entry = append(geoSiteList.Entry, site)
+				}
+			}
+		}
+	}
+
+	protoBytes, err := proto.Marshal(geoSiteList)
+	if err != nil {
+		return fmt.Errorf("failed to marshal: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(*outputDir, datFileName), protoBytes, 0644); err != nil {
+		return fmt.Errorf("failed to write file %q: %w", datFileName, err)
+	}
+	fmt.Printf("dat %q has been generated successfully\n", datFileName)
+	return nil
 }
 
 func writePlainList(listname string, entries []*Entry) error {
@@ -105,89 +208,70 @@ func exportGFWList(pl *ParsedList) error {
 
 	for _, entry := range pl.Entries {
 		exclude := false
-		if attrs := entry.Attrs; len(attrs) > 0 {
-			// exclude rules that have '@cn' attribute
-			for _, attr := range attrs {
-				if strings.EqualFold(attr, "cn") {
-					exclude = true
-					break
-				}
+		for _, attr := range entry.Attrs {
+			if strings.EqualFold(attr, "cn") {
+				exclude = true
+				break
 			}
 		}
 		if exclude {
-			fmt.Printf("Exclude '%s' from gfwlist.txt because it has '@cn' attribute\n", entry.Value)
+			fmt.Printf("Exclude %q from gfwlist.txt because it has '@cn' attribute\n", entry.Value)
 			continue
 		}
 		switch entry.Type {
-		case "domain":
+		case dlc.RuleTypeDomain:
 			entryBytes = append(entryBytes, []byte("||"+entry.Value+"\n")...)
-		case "full":
+		case dlc.RuleTypeFullDomain:
 			entryBytes = append(entryBytes, []byte("|http://"+entry.Value+"\n")...)
 			entryBytes = append(entryBytes, []byte("|https://"+entry.Value+"\n")...)
-		case "keyword":
+		case dlc.RuleTypeKeyword:
 			entryBytes = append(entryBytes, []byte(entry.Value+"\n")...)
-		case "regexp":
+		case dlc.RuleTypeRegexp:
 			entryBytes = append(entryBytes, []byte("/"+entry.Value+"/\n")...)
 		default:
 			return errors.New("unknown domain type: " + entry.Type)
 		}
 	}
 
-	f, err := os.OpenFile("gfwlist.txt", os.O_RDWR|os.O_CREATE, 0644)
+	file, err := os.Create("gfwlist.txt")
 	if err != nil {
 		return err
 	}
-	encoder := base64.NewEncoder(base64.StdEncoding, f)
+	defer file.Close()
+
+	encoder := base64.NewEncoder(base64.StdEncoding, file)
 	if _, err = encoder.Write(entryBytes); err != nil {
 		return err
 	}
-	fmt.Println("gfwlist.txt has been generated successfully in current directory.")
 	if err = encoder.Close(); err != nil {
 		return err
 	}
+	fmt.Println("gfwlist.txt has been generated successfully")
 	return nil
 }
 
-func parseEntry(line string) (*Entry, []string, error) {
-	entry := new(Entry)
-	parts := strings.Fields(line)
+func parseEntry(typ, rule string) (*Entry, []string, error) {
+	entry := &Entry{Type: typ}
+	parts := strings.Fields(rule)
 	if len(parts) == 0 {
-		return entry, nil, fmt.Errorf("empty line")
+		return entry, nil, fmt.Errorf("empty domain rule")
 	}
-
-	// Parse type and value
-	typ, val, isTypeSpecified := strings.Cut(parts[0], ":")
-	typ = strings.ToLower(typ)
-	if !isTypeSpecified { // Default RuleType
-		if !validateDomainChars(typ) {
-			return entry, nil, fmt.Errorf("invalid domain: %q", typ)
+	// Parse value
+	switch entry.Type {
+	case dlc.RuleTypeRegexp:
+		if _, err := regexp.Compile(parts[0]); err != nil {
+			return entry, nil, fmt.Errorf("invalid regexp %q: %w", parts[0], err)
 		}
-		entry.Type = dlc.RuleTypeDomain
-		entry.Value = typ
-	} else {
-		switch typ {
-		case dlc.RuleTypeRegexp:
-			if _, err := regexp.Compile(val); err != nil {
-				return entry, nil, fmt.Errorf("invalid regexp %q: %w", val, err)
-			}
-			entry.Type = dlc.RuleTypeRegexp
-			entry.Value = val
-		case dlc.RuleTypeInclude:
-			entry.Type = dlc.RuleTypeInclude
-			entry.Value = strings.ToUpper(val)
-			if !validateSiteName(entry.Value) {
-				return entry, nil, fmt.Errorf("invalid included list name: %q", entry.Value)
-			}
-		case dlc.RuleTypeDomain, dlc.RuleTypeFullDomain, dlc.RuleTypeKeyword:
-			entry.Type = typ
-			entry.Value = strings.ToLower(val)
-			if !validateDomainChars(entry.Value) {
-				return entry, nil, fmt.Errorf("invalid domain: %q", entry.Value)
-			}
-		default:
-			return entry, nil, fmt.Errorf("invalid type: %q", typ)
+		entry.Value = parts[0]
+	case dlc.RuleTypeDomain, dlc.RuleTypeFullDomain, dlc.RuleTypeKeyword:
+		entry.Value = strings.ToLower(parts[0])
+		if !validateDomainChars(entry.Value) {
+			return entry, nil, fmt.Errorf("invalid domain: %q", entry.Value)
 		}
+	default:
+		return entry, nil, fmt.Errorf("unknown rule type: %q", entry.Type)
 	}
+	plen := len(entry.Type) + len(entry.Value) + 1
 
 	// Parse attributes and affiliations
 	var affs []string
@@ -199,6 +283,7 @@ func parseEntry(line string) (*Entry, []string, error) {
 				return entry, affs, fmt.Errorf("invalid attribute: %q", attr)
 			}
 			entry.Attrs = append(entry.Attrs, attr)
+			plen += 2 + len(attr)
 		case '&':
 			aff := strings.ToUpper(part[1:])
 			if !validateSiteName(aff) {
@@ -206,33 +291,70 @@ func parseEntry(line string) (*Entry, []string, error) {
 			}
 			affs = append(affs, aff)
 		default:
-			return entry, affs, fmt.Errorf("invalid attribute/affiliation: %q", part)
+			return entry, affs, fmt.Errorf("unknown field: %q", part)
 		}
 	}
 
-	if entry.Type != dlc.RuleTypeInclude {
-		slices.Sort(entry.Attrs) // Sort attributes
-		// Formated plain entry: type:domain.tld:@attr1,@attr2
-		var plain strings.Builder
-		plain.Grow(len(entry.Type) + len(entry.Value) + 10)
-		plain.WriteString(entry.Type)
-		plain.WriteByte(':')
-		plain.WriteString(entry.Value)
-		for i, attr := range entry.Attrs {
-			if i == 0 {
-				plain.WriteByte(':')
-			} else {
-				plain.WriteByte(',')
-			}
-			plain.WriteByte('@')
-			plain.WriteString(attr)
+	slices.Sort(entry.Attrs) // Sort attributes
+	// Formated plain entry: type:domain.tld:@attr1,@attr2
+	var plain strings.Builder
+	plain.Grow(plen)
+	plain.WriteString(entry.Type)
+	plain.WriteByte(':')
+	plain.WriteString(entry.Value)
+	for i, attr := range entry.Attrs {
+		if i == 0 {
+			plain.WriteByte(':')
+		} else {
+			plain.WriteByte(',')
 		}
-		entry.Plain = plain.String()
+		plain.WriteByte('@')
+		plain.WriteString(attr)
 	}
+	entry.Plain = plain.String()
 	return entry, affs, nil
 }
 
+func parseInclusion(rule string) (*Inclusion, error) {
+	parts := strings.Fields(rule)
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("empty inclusion")
+	}
+	inc := &Inclusion{Source: strings.ToUpper(parts[0])}
+	if !validateSiteName(inc.Source) {
+		return inc, fmt.Errorf("invalid included list name: %q", inc.Source)
+	}
+
+	// Parse attributes
+	for _, part := range parts[1:] {
+		switch part[0] {
+		case '@':
+			attr := strings.ToLower(part[1:])
+			if attr[0] == '-' {
+				battr := attr[1:]
+				if !validateAttrChars(battr) {
+					return inc, fmt.Errorf("invalid ban attribute: %q", battr)
+				}
+				inc.BanAttrs = append(inc.BanAttrs, battr)
+			} else {
+				if !validateAttrChars(attr) {
+					return inc, fmt.Errorf("invalid must attribute: %q", attr)
+				}
+				inc.MustAttrs = append(inc.MustAttrs, attr)
+			}
+		case '&':
+			return inc, fmt.Errorf("affiliation is not allowed for inclusion")
+		default:
+			return inc, fmt.Errorf("unknown field: %q", part)
+		}
+	}
+	return inc, nil
+}
+
 func validateDomainChars(domain string) bool {
+	if domain == "" {
+		return false
+	}
 	for i := range domain {
 		c := domain[i]
 		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' {
@@ -244,9 +366,12 @@ func validateDomainChars(domain string) bool {
 }
 
 func validateAttrChars(attr string) bool {
+	if attr == "" {
+		return false
+	}
 	for i := range attr {
 		c := attr[i]
-		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '!' || c == '-' {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '!' {
 			continue
 		}
 		return false
@@ -255,6 +380,9 @@ func validateAttrChars(attr string) bool {
 }
 
 func validateSiteName(name string) bool {
+	if name == "" {
+		return false
+	}
 	for i := range name {
 		c := name[i]
 		if (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '!' || c == '-' {
@@ -291,26 +419,23 @@ func (p *Processor) loadData(listName string, path string) error {
 		if line == "" {
 			continue
 		}
-		entry, affs, err := parseEntry(line)
-		if err != nil {
-			return fmt.Errorf("error in %q at line %d: %w", path, lineIdx, err)
+		typ, rule, isTypeSpecified := strings.Cut(line, ":")
+		if !isTypeSpecified { // Default RuleType
+			typ, rule = dlc.RuleTypeDomain, typ
+		} else {
+			typ = strings.ToLower(typ)
 		}
-
-		if entry.Type == dlc.RuleTypeInclude {
-			inc := &Inclusion{Source: entry.Value}
-			for _, attr := range entry.Attrs {
-				if attr[0] == '-' {
-					inc.BanAttrs = append(inc.BanAttrs, attr[1:])
-				} else {
-					inc.MustAttrs = append(inc.MustAttrs, attr)
-				}
-			}
-			for _, aff := range affs {
-				apl := p.getOrCreateParsedList(aff)
-				apl.Inclusions = append(apl.Inclusions, inc)
+		if typ == dlc.RuleTypeInclude {
+			inc, err := parseInclusion(rule)
+			if err != nil {
+				return fmt.Errorf("error in %q at line %d: %w", path, lineIdx, err)
 			}
 			pl.Inclusions = append(pl.Inclusions, inc)
 		} else {
+			entry, affs, err := parseEntry(typ, rule)
+			if err != nil {
+				return fmt.Errorf("error in %q at line %d: %w", path, lineIdx, err)
+			}
 			for _, aff := range affs {
 				apl := p.getOrCreateParsedList(aff)
 				apl.Entries = append(apl.Entries, entry)
@@ -318,7 +443,7 @@ func (p *Processor) loadData(listName string, path string) error {
 			pl.Entries = append(pl.Entries, entry)
 		}
 	}
-	return nil
+	return scanner.Err()
 }
 
 func isMatchAttrFilters(entry *Entry, incFilter *Inclusion) bool {
@@ -419,6 +544,9 @@ func (p *Processor) resolveList(plname string) error {
 			}
 		}
 	}
+	if len(roughMap) == 0 {
+		return fmt.Errorf("empty list")
+	}
 	p.finalMap[plname] = polishList(roughMap)
 	return nil
 }
@@ -446,14 +574,14 @@ func run() error {
 		return fmt.Errorf("failed to loadData: %w", err)
 	}
 	// Generate finalMap
-	processor.finalMap = make(map[string][]*Entry, len(processor.plMap))
+	sitesCount := len(processor.plMap)
+	processor.finalMap = make(map[string][]*Entry, sitesCount)
 	processor.cirIncMap = make(map[string]bool)
 	for plname := range processor.plMap {
 		if err := processor.resolveList(plname); err != nil {
 			return fmt.Errorf("failed to resolveList %q: %w", plname, err)
 		}
 	}
-
 	// Make sure output directory exists
 	if err := os.MkdirAll(*outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
@@ -462,56 +590,67 @@ func run() error {
 	for rawEpList := range strings.SplitSeq(*exportLists, ",") {
 		if epList := strings.TrimSpace(rawEpList); epList != "" {
 			entries, exist := processor.finalMap[strings.ToUpper(epList)]
-			if !exist || len(entries) == 0 {
-				fmt.Printf("list %q does not exist or is empty\n", epList)
+			if !exist {
+				fmt.Printf("[Warn] list %q does not exist\n", epList)
 				continue
 			}
 			if err := writePlainList(epList, entries); err != nil {
-				fmt.Printf("failed to write list %q: %v\n", epList, err)
+				fmt.Printf("[Error] failed to write list %q: %v\n", epList, err)
 				continue
 			}
-			fmt.Printf("list %q has been generated successfully.\n", epList)
+			fmt.Printf("list %q has been generated successfully\n", epList)
 		}
 	}
 
-	// Generate dat file
-	protoList := new(router.GeoSiteList)
+	// Generate proto sites
+	gs := &GeoSites{
+		Sites:   make([]*router.GeoSite, 0, sitesCount),
+		SiteIdx: make(map[string]int, sitesCount),
+	}
 	for siteName, siteEntries := range processor.finalMap {
-		site, err := makeProtoList(siteName, siteEntries)
-		if err != nil {
-			return fmt.Errorf("failed to makeProtoList %q: %w", siteName, err)
+		gs.Sites = append(gs.Sites, makeProtoList(siteName, siteEntries))
+	}
+	if *shadowrocket {
+		pl, exist := processor.plMap["GEOLOCATION-!CN"]
+		if !exist {
+			return fmt.Errorf("list %q not found for shadowrocket export", "GEOLOCATION-!CN")
 		}
-		protoList.Entry = append(protoList.Entry, site)
-
-		// Export GfwList
-		if *shadowrocket && siteName == "GEOLOCATION-!CN" {
-			pl := processor.plMap[siteName]
-			if err := exportGFWList(pl); err != nil {
-				fmt.Println("Failed: ", err)
-				os.Exit(1)
-			}
+		if err := exportGFWList(pl); err != nil {
+			return fmt.Errorf("failed to export gfwlist.txt: %w", err)
 		}
 	}
-	// Sort protoList so the marshaled list is reproducible
-	slices.SortFunc(protoList.Entry, func(a, b *router.GeoSite) int {
+	processor = nil
+	// Sort proto sites so the generated file is reproducible
+	slices.SortFunc(gs.Sites, func(a, b *router.GeoSite) int {
 		return strings.Compare(a.CountryCode, b.CountryCode)
 	})
+	for i := range sitesCount {
+		gs.SiteIdx[gs.Sites[i].CountryCode] = i
+	}
 
-	protoBytes, err := proto.Marshal(protoList)
-	if err != nil {
-		return fmt.Errorf("failed to marshal: %w", err)
+	// Load tasks and generate dat files
+	var tasks []DatTask
+	if *datProfile == "" {
+		tasks = []DatTask{{Name: *outputName, Mode: ModeAll}}
+	} else {
+		var err error
+		tasks, err = loadTasks(*datProfile)
+		if err != nil {
+			return fmt.Errorf("failed to loadTasks %q: %v", *datProfile, err)
+		}
 	}
-	if err := os.WriteFile(filepath.Join(*outputDir, *outputName), protoBytes, 0644); err != nil {
-		return fmt.Errorf("failed to write output: %w", err)
+	for _, task := range tasks {
+		if err := gs.assembleDat(task); err != nil {
+			fmt.Printf("[Error] failed to assembleDat %q: %v", task.Name, err)
+		}
 	}
-	fmt.Printf("%q has been generated successfully.\n", *outputName)
 	return nil
 }
 
 func main() {
 	flag.Parse()
 	if err := run(); err != nil {
-		fmt.Printf("Fatal error: %v\n", err)
+		fmt.Printf("[Fatal] critical error: %v\n", err)
 		os.Exit(1)
 	}
 }

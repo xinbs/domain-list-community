@@ -8,6 +8,7 @@ include:amazon @ads
 include:apple @ads
 include:baidu @ads
 include:bytedance @ads
+include:carrotquest @ads
 include:cctv @ads
 include:disney @ads
 include:dmm @ads
@@ -24,14 +25,17 @@ include:le @ads
 include:meta @ads
 include:microsoft @ads
 include:mihoyo @ads
+include:mindbox @ads
 include:netease @ads
 include:ookla-speedtest @ads
 include:openai @ads
+include:ozon @ads
 include:picacg @ads
 include:pikpak @ads
 include:pixiv @ads
 include:qihoo360 @ads
 include:samsung @ads
+include:sber @ads
 include:sina @ads
 include:snap @ads
 include:sohu @ads
@@ -42,10 +46,13 @@ include:tendcloud @ads
 include:twitter @ads
 include:unity @ads
 include:unitychina @ads
+include:wildberries @ads
+include:x5 @ads
 include:xhamster @ads
 include:xiaomi @ads
 include:ximalaya @ads
 include:yahoo @ads
+include:yandex @ads
 include:zhihu @ads
 
 # Other domains for ads serving
