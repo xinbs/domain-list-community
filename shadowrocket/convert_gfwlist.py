@@ -324,27 +324,31 @@ def load_whitelist_rules(file_path='whitelist.list'):
     return rules
 
 
-def load_proxy_rules(file_path='proxy.list'):
+def load_proxy_rules(file_path='proxy.list', extra_files=('ai-source.list',)):
     rules = []
-    if not os.path.exists(file_path):
-        print(f'警告: 代理名单文件不存在 {file_path}')
-        return rules
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                rule = normalize_custom_rule(line, 'PROXY')
-                if rule:
-                    rules.append(rule)
-    except Exception as e:
-        print(f'错误: 读取代理名单文件失败: {e}')
+    file_paths = file_path if isinstance(file_path, (list, tuple)) else (file_path,)
+    optional_paths = extra_files if isinstance(extra_files, (list, tuple)) else (extra_files,)
+    for path, required in [(path, True) for path in file_paths] + [(path, False) for path in optional_paths]:
+        if not os.path.exists(path):
+            if required:
+                print(f'警告: 代理名单文件不存在 {path}')
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    rule = normalize_custom_rule(line, 'PROXY')
+                    if rule:
+                        rules.append(rule)
+        except Exception as e:
+            print(f'错误: 读取代理名单文件失败: {e}')
     return rules
 
 
 def normalize_custom_rule(line, action):
-    rule_types = {'DOMAIN-SUFFIX', 'DOMAIN', 'DOMAIN-KEYWORD', 'IP-CIDR'}
+    rule_types = {'DOMAIN-SUFFIX', 'DOMAIN', 'DOMAIN-KEYWORD', 'IP-CIDR', 'URL-REGEX'}
     actions = {'DIRECT', 'PROXY', 'REJECT'}
     parts = [p.strip() for p in line.split(',')]
     if parts and parts[0] in rule_types:
@@ -369,24 +373,26 @@ def normalize_custom_rule(line, action):
 
 def load_custom_entries(file_path):
     entries = []
-    if not os.path.exists(file_path):
-        return entries
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                entry = normalize_custom_entry(line)
-                if entry:
-                    entries.append(entry)
-    except Exception as e:
-        print(f'错误: 读取自定义名单失败: {e}')
+    file_paths = file_path if isinstance(file_path, (list, tuple)) else (file_path,)
+    for path in file_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    entry = normalize_custom_entry(line)
+                    if entry:
+                        entries.append(entry)
+        except Exception as e:
+            print(f'错误: 读取自定义名单失败: {e}')
     return entries
 
 
 def normalize_custom_entry(line):
-    rule_types = {'DOMAIN-SUFFIX', 'DOMAIN', 'DOMAIN-KEYWORD', 'IP-CIDR'}
+    rule_types = {'DOMAIN-SUFFIX', 'DOMAIN', 'DOMAIN-KEYWORD', 'IP-CIDR', 'URL-REGEX'}
     parts = [p.strip() for p in line.split(',')]
     if parts and parts[0] in rule_types:
         if len(parts) < 2:
@@ -395,6 +401,8 @@ def normalize_custom_entry(line):
         value = parts[1]
         if rule_type == 'IP-CIDR':
             return None
+        if rule_type == 'URL-REGEX':
+            return {'type': 'regexp', 'value': value}
         if rule_type == 'DOMAIN':
             return {'type': 'full', 'value': value}
         if rule_type == 'DOMAIN-KEYWORD':
@@ -448,7 +456,8 @@ def format_gfwlist_entry(entry, is_whitelist):
     if entry_type == 'keyword':
         return [f'{prefix}{value}']
     if entry_type == 'regexp':
-        return [f'{prefix}/{value}/']
+        escaped_value = value.replace('/', r'\/')
+        return [f'{prefix}/{escaped_value}/']
     return []
 
 
@@ -504,7 +513,7 @@ def main():
         save_shadowrocket_rules(gfwlist_rules, 'resultant/Shadowrocket_gfwlist.conf')
 
         whitelist_entries = load_custom_entries('whitelist.list')
-        proxy_entries = load_custom_entries('proxy.list')
+        proxy_entries = load_custom_entries(('proxy.list', 'ai-source.list'))
         gfwlist_content = build_gfwlist_content(gfw_domains, whitelist_entries, proxy_entries)
         save_gfwlist(gfwlist_content, 'resultant/Shadowrocket_gfwlist.txt')
         

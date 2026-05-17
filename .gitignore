@@ -18,6 +18,9 @@ venv/
 env/
 .venv/
 
+# Generated Shadowrocket supplemental rules
+/shadowrocket/ai-source.list
+
 # Python cache
 __pycache__/
 *.pyc

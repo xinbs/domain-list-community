@@ -52,6 +52,11 @@ jobs:
           pip install --upgrade pip
           pip install requests beautifulsoup4
 
+      - name: Update AI domain source
+        run: |
+          cd code || exit 1
+          python scripts/update_ai_source.py
+
       - name: Build Shadowrocket rules
         run: |
           cd code/shadowrocket
