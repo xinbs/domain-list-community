@@ -22,7 +22,7 @@ jobs:
     steps:
 
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         ref: master
         fetch-depth: 0
@@ -35,12 +35,39 @@ jobs:
         git config --global pull.rebase false
 
     - name: Load upstream commits
-      run: git pull https://github.com/v2fly/domain-list-community.git --log --no-commit
+      run: |
+        set -euo pipefail
+        git fetch https://github.com/v2fly/domain-list-community.git master
+
+        if git merge FETCH_HEAD --log --no-commit; then
+          exit 0
+        fi
+
+        # Workflows are maintained by this fork and are excluded from the
+        # upstream merge below. Resolve conflicts in that directory locally so
+        # they do not abort an otherwise clean upstream sync.
+        has_unexpected_conflict=false
+        while IFS= read -r conflicted_file; do
+          case "$conflicted_file" in
+            .github/*) ;;
+            *)
+              echo "Unresolved upstream conflict: $conflicted_file" >&2
+              has_unexpected_conflict=true
+              ;;
+          esac
+        done < <(git diff --name-only --diff-filter=U)
+
+        if [ "$has_unexpected_conflict" = true ]; then
+          exit 1
+        fi
+
+        git restore --ours --worktree -- .github
+        git add .github
 
     - name: Apply commit changes
       run: |
         if [ -f ./.git/MERGE_MSG ]; then
-        mkdir ./tmp && cp ./.git/MERGE_MSG ./tmp/message
+        mkdir -p ./tmp && cp ./.git/MERGE_MSG ./tmp/message
         sed -i "1c [bot] AutoMerging: merge all upstream's changes:" ./tmp/message
         sed -i '/^\#.*/d' ./tmp/message
         git reset HEAD .github
