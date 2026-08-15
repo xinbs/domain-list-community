@@ -22,11 +22,17 @@ def run_script(script_name, description):
         result = subprocess.run([sys.executable, str(script_path)], 
                               capture_output=True, text=True, cwd=Path(__file__).parent)
         if result.returncode == 0:
-            print(result.stdout)
+            if result.stdout:
+                print(result.stdout, end='')
+            if result.stderr:
+                print(result.stderr, file=sys.stderr, end='')
             print(f"✅ {description} 完成")
         else:
             print(f"❌ {description} 失败:")
-            print(result.stderr)
+            if result.stdout:
+                print(result.stdout, end='')
+            if result.stderr:
+                print(result.stderr, file=sys.stderr, end='')
             return False
     except Exception as e:
         print(f"❌ 运行 {script_name} 时出错: {e}")
