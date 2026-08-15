@@ -21,20 +21,20 @@ jobs:
 
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: code
           fetch-depth: 0
 
       - name: Checkout release branch for publishing
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: release
           ref: release
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
