@@ -533,6 +533,10 @@ xn--gogl-1nd42e.com # goοglе.com
 xplr.co
 zukunftswerkstatt.de
 
+# Google Password Manager passkey cloud authenticator
+# https://chromium.googlesource.com/chromium/src/+/main/device/fido/enclave/constants.cc
+full:enclave.ua5v.com
+
 # Google safe browsing relay
 # https://www.fastly.com/press/press-releases/google-selects-Fastly-Oblivious-HTTP-Relay-for-Privacy-Sandbox/
 full:google-ohttp-relay-safebrowsing.fastly-edge.com

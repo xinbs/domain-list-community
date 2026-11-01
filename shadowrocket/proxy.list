@@ -15,3 +15,9 @@ bing.com
 warp.dev
 google.com.hk
 accounts.google.com.hk
+
+# Google Password Manager passkeys, key management and PIN recovery
+DOMAIN,enclave.ua5v.com
+DOMAIN,securitydomain-pa.googleapis.com
+DOMAIN,cryptauthvault.googleapis.com
+DOMAIN,www.gstatic.com
