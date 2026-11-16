@@ -84,6 +84,28 @@ python convert_gfwlist_ad.py
 
 ## 下载地址（release 分支）
 
+### App Store 直连版（独立配置）
+
+原有文件继续保留；需要 App Store 绕过代理时，使用以下新增版本：
+
+| 用途 | 文件 |
+| --- | --- |
+| 标准 GFWList（AutoProxy Base64） | [Shadowrocket_gfwlist_no_appstore.txt](https://raw.githubusercontent.com/xinbs/domain-list-community/release/shadowrocket/resultant/Shadowrocket_gfwlist_no_appstore.txt) |
+| 小火箭配置 | [Shadowrocket_gfwlist_no_appstore.conf](https://raw.githubusercontent.com/xinbs/domain-list-community/release/shadowrocket/resultant/Shadowrocket_gfwlist_no_appstore.conf) |
+| 小火箭配置，带广告过滤 | [Shadowrocket_gfwlist_ad_no_appstore.conf](https://raw.githubusercontent.com/xinbs/domain-list-community/release/shadowrocket/resultant/Shadowrocket_gfwlist_ad_no_appstore.conf) |
+
+直连范围为 `apps.apple.com`、`itunes.apple.com`、`mzstatic.com` 及其子域名，依据 [Apple 官方网络域名说明](https://support.apple.com/en-us/101555) 的商店内容条目。这些域名也用于部分音乐和图书内容，共享它们的流量会一起直连；其他 Apple 域名仍按原规则处理。
+
+小火箭版将这三条 `DIRECT` 规则放在广告和代理规则之前。GFWList 版使用 `@@||域名^` 例外规则覆盖更宽泛的代理条目；导入端须支持 AutoProxy 例外语法。`.txt` 用于 GFWList/PAC 订阅，`.conf` 用于小火箭配置导入，两种格式分别使用。
+
+GitHub Actions 的 **Build Shadowrocket Rules** 工作流会生成并校验这三个文件和 SHA-256 校验文件，发布到 `release` 分支；现有每日构建和上游数据构建完成后的自动触发继续生效。也可以在仓库根目录运行：
+
+```bash
+python3 -m unittest discover -s shadowrocket -p 'test_*.py' -v
+python3 shadowrocket/build_shadowrocket_rules.py
+python3 shadowrocket/build_appstore_direct.py --verify-only
+```
+
 ### 规则文件
 
 - Shadowrocket_gfwlist.conf: https://cdn.jsdelivr.net/gh/xinbs/domain-list-community@release/shadowrocket/resultant/Shadowrocket_gfwlist.conf

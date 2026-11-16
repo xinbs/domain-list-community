@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: shadowrocket-rules-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-shadowrocket-rules:
     name: Build Shadowrocket Rules
@@ -61,8 +65,10 @@ jobs:
         run: |
           cd code/shadowrocket
           source shadowrocket_env/bin/activate
+          python -m unittest discover -s . -p 'test_*.py' -v
           echo "Building Shadowrocket rules via main script..."
           python build_shadowrocket_rules.py
+          python build_appstore_direct.py --verify-only
 
       - name: Generate file checksums
         run: |
